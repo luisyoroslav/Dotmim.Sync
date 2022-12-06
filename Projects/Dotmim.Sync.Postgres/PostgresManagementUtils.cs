@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Dotmim.Sync.Builders;
+using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Text;
@@ -56,38 +57,22 @@ namespace Dotmim.Sync.Postgres
         public static async Task<SyncTable> GetColumnsForTableAsync(string tableName, string schemaName, NpgsqlConnection connection, NpgsqlTransaction transaction)
         {
 
-            var commandColumn = $"Select col.name as name, " +
-                                $"col.column_id,  " +
-                                $"typ.name as [type],  " +
-                                $"col.max_length,  " +
-                                $"col.precision,  " +
-                                $"col.scale,  " +
-                                $"col.is_nullable,  " +
-                                $"col.is_computed,  " +
-                                $"col.is_identity,  " +
-                                $"ind.is_unique,  " +
-                                $"ident_seed(sch.name + '.' + tbl.name) AS seed, " +
-                                $"ident_incr(sch.name + '.' + tbl.name) AS step, " +
-                                $"object_definition(col.default_object_id) AS defaultvalue " +
-                                $"  from sys.columns as col " +
-                                $"  Inner join sys.tables as tbl on tbl.object_id = col.object_id " +
-                                $"  Inner join sys.schemas as sch on tbl.schema_id = sch.schema_id " +
-                                $"  Inner Join sys.systypes typ on typ.xusertype = col.system_type_id " +
-                                $"  Left outer join sys.indexes ind on ind.object_id = col.object_id and ind.index_id = col.column_id " +
-                                $"  Where tbl.name = @tableName and sch.name = @schemaName ";
+            var commandColumn = "SELECT * FROM information_schema.columns" +
+                                "WHERE table_schema = @schemaName" +
+                                "AND table_name = @tableName";
 
             var tableNameNormalized = ParserName.Parse(tableName).Unquoted().Normalized().ToString();
             var tableNameString = ParserName.Parse(tableName).ToString();
 
-            var schemaNameString = "dbo";
+            var schemaNameString = "public";
             if (!string.IsNullOrEmpty(schemaName))
             {
                 schemaNameString = ParserName.Parse(schemaName).ToString();
-                schemaNameString = string.IsNullOrWhiteSpace(schemaNameString) ? "dbo" : schemaNameString;
+                schemaNameString = string.IsNullOrWhiteSpace(schemaNameString) ? "public" : schemaNameString;
             }
 
             var syncTable = new SyncTable(tableNameNormalized);
-            using (var sqlCommand = new SqlCommand(commandColumn, connection))
+            using (var sqlCommand = new NpgsqlCommand(commandColumn, connection))
             {
                 sqlCommand.Parameters.AddWithValue("@tableName", tableNameString);
                 sqlCommand.Parameters.AddWithValue("@schemaName", schemaNameString);

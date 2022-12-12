@@ -12,9 +12,9 @@ namespace Dotmim.Sync.Postgres
     {
         public static async Task<SyncSetup> GetAllTablesAsync(NpgsqlConnection connection, NpgsqlTransaction transaction)
         {
-            var command = "SELECT tbl.table_name TableName, tbl.table_schema SchemaName FROM information_schema.tables tbl" +
-                          "WHERE table_schema NOT IN ('pg_catalog', 'information_schema')" +
-                          "AND table_type = 'BASE TABLE';";
+            var command = "SELECT tbl.table_name AS TableName, tbl.table_schema AS SchemaName FROM information_schema.tables AS tbl " +
+                          "WHERE tbl.table_schema NOT IN ('pg_catalog', 'information_schema') " +
+                          "AND tbl.table_type = 'BASE TABLE';";
 
             var syncSetup = new SyncSetup();
 
@@ -57,9 +57,16 @@ namespace Dotmim.Sync.Postgres
         public static async Task<SyncTable> GetColumnsForTableAsync(string tableName, string schemaName, NpgsqlConnection connection, NpgsqlTransaction transaction)
         {
 
-            var commandColumn = "SELECT * FROM information_schema.columns" +
-                                "WHERE table_schema = @schemaName" +
-                                "AND table_name = @tableName";
+            var commandColumn = "SELECT table_catalog, table_schema, table_name name, column_name, ordinal_position, column_default, is_nullable, " +
+                                "data_type, character_maximum_length, character_octet_length, numeric_precision, numeric_precision_radix, " +
+                                "numeric_scale, datetime_precision, interval_type, interval_precision, character_set_catalog, character_set_schema, " + 
+                                "character_set_name, collation_catalog, collation_schema, collation_name, domain_catalog, domain_schema, domain_name, " +
+                                "udt_catalog, udt_schema, udt_name, scope_catalog, scope_schema, scope_name, maximum_cardinality, dtd_identifier, " +
+                                "is_self_referencing, is_identity, identity_generation, identity_start, identity_increment, identity_maximum, identity_minimum, " +
+                                "identity_cycle, is_generated, generation_expression, is_updatable " +
+                                "FROM information_schema.columns " +
+                                "WHERE table_schema = @schemaName " +
+                                "AND table_name = @tableName;";
 
             var tableNameNormalized = ParserName.Parse(tableName).Unquoted().Normalized().ToString();
             var tableNameString = ParserName.Parse(tableName).ToString();
@@ -72,6 +79,7 @@ namespace Dotmim.Sync.Postgres
             }
 
             var syncTable = new SyncTable(tableNameNormalized);
+
             using (var sqlCommand = new NpgsqlCommand(commandColumn, connection))
             {
                 sqlCommand.Parameters.AddWithValue("@tableName", tableNameString);
@@ -85,7 +93,7 @@ namespace Dotmim.Sync.Postgres
                 sqlCommand.Transaction = transaction;
 
                 using (var reader = await sqlCommand.ExecuteReaderAsync().ConfigureAwait(false))
-                    syncTable.Load(reader);
+                        syncTable.Load(reader);
 
                 if (!alreadyOpened)
                     connection.Close();

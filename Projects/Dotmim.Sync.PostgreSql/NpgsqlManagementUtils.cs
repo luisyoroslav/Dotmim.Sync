@@ -14,21 +14,16 @@ namespace Dotmim.Sync.Postgres
 {
     public static class NpgsqlManagementUtils
     {
-
-
-        /// <summary>
-        /// Get Table
-        /// </summary>
-        public static async Task<SyncTable> GetTableAsync(NpgsqlConnection connection, NpgsqlTransaction transaction, string tableName, string schemaName)
+        public static async Task<SyncTable> GetTableDefinitionAsync(string tableName, string schemaName, NpgsqlConnection connection, NpgsqlTransaction transaction)
         {
 
-            var command = $"SELECT * " +
-                           " FROM information_schema.tables " +
-                           " WHERE table_type = 'BASE TABLE' " +
-                           " AND table_schema != 'pg_catalog' AND table_schema != 'information_schema' " +
-                           " AND table_name=@tableName AND table_schema=@schemaName " +
-                           " ORDER BY table_schema, table_name " +
-                           " LIMIT 1";
+            var command = "SELECT table_name AS TableName, table_schema AS SchemaName " +
+                          "FROM information_schema.tables " +
+                          "WHERE table_type = 'BASE TABLE' " +
+                          "AND table_schema != 'pg_catalog' AND table_schema != 'information_schema' " +
+                          "AND table_name = @tableName AND table_schema = @schemaName;";
+                          //"ORDER BY table_schema, table_name " +
+                          //"LIMIT 1;";
 
             var tableNameNormalized = ParserName.Parse(tableName, "\"").Unquoted().Normalized().ToString();
             var tableNameString = ParserName.Parse(tableName, "\"").ToString();
@@ -62,6 +57,70 @@ namespace Dotmim.Sync.Postgres
                     connection.Close();
 
             }
+            return syncTable;
+        }
+
+        public static async Task<bool> TableExistsAsync(string tableName, string schemaName, NpgsqlConnection connection, NpgsqlTransaction transaction)
+        {
+            var tableNameString = ParserName.Parse(tableName, "\"").ToString();
+            var schemaNameString = ParserName.Parse(schemaName, "\"").ToString();
+            schemaNameString = string.IsNullOrEmpty(schemaNameString) ? "public" : schemaNameString;
+
+            var command = "SELECT COUNT(*) FROM information_schema.tables " +
+                          "WHERE table_type = 'BASE TABLE' AND table_schema != 'pg_catalog' AND table_schema != 'information_schema' " +
+                          "AND table_name = @tableName AND table_schema = @schemaName;";
+
+            using var sqlCommand = new NpgsqlCommand(command, connection);
+
+            sqlCommand.Parameters.AddWithValue("@tableName", tableNameString);
+            sqlCommand.Parameters.AddWithValue("@schemaName", schemaNameString);
+
+            bool alreadyOpened = connection.State == ConnectionState.Open;
+
+            if (!alreadyOpened)
+                await connection.OpenAsync().ConfigureAwait(false);
+
+            if (transaction != null)
+                sqlCommand.Transaction = transaction;
+
+            var result = await sqlCommand.ExecuteScalarAsync().ConfigureAwait(false);
+
+            var tableExist = (int)result != 0;
+
+            if (!alreadyOpened)
+                connection.Close();
+
+            return tableExist;
+        }
+
+        public static async Task<SyncTable> GetTableAsync(string tableName, string schemaName, NpgsqlConnection connection, NpgsqlTransaction transaction)
+        {
+            //var pTableName = ParserName.Parse(tableName);
+            //var pSchemaName = ParserName.Parse(schemaName);
+
+            var name = tableName;
+            var sName = string.IsNullOrEmpty(schemaName) ? "public" : schemaName;
+
+            var command = $"SELECT * FROM {sName}.{name};";
+
+            var syncTable = new SyncTable(name, sName);
+
+            using var sqlCommand = new NpgsqlCommand(command, connection);
+
+            bool alreadyOpened = connection.State == ConnectionState.Open;
+
+            if (!alreadyOpened)
+                await connection.OpenAsync().ConfigureAwait(false);
+
+            if (transaction != null)
+                sqlCommand.Transaction = transaction;
+
+            using (var reader = await sqlCommand.ExecuteReaderAsync().ConfigureAwait(false))
+                syncTable.Load(reader);
+
+            if (!alreadyOpened)
+                connection.Close();
+
             return syncTable;
         }
 
@@ -442,38 +501,6 @@ namespace Dotmim.Sync.Postgres
                 if (!alreadyOpened)
                     connection.Close();
             }
-            return tableExist;
-        }
-
-        public static async Task<bool> TableExistsAsync(string tableName, string schemaName, NpgsqlConnection connection, NpgsqlTransaction transaction)
-        {
-            var tableNameString = ParserName.Parse(tableName, "\"").ToString();
-            var schemaNameString = ParserName.Parse(schemaName, "\"").ToString();
-            schemaNameString = string.IsNullOrEmpty(schemaNameString) ? "public" : schemaNameString;
-
-            var command = "SELECT count(*) FROM information_schema.tables " +
-                          "WHERE table_type = 'BASE TABLE' AND table_schema != 'pg_catalog' AND table_schema != 'information_schema' " +
-                          "AND table_name = @tableName AND table_schema = @schemaName";
-
-            using var sqlCommand = new NpgsqlCommand(command, connection);
-            
-            sqlCommand.Parameters.AddWithValue("@tableName", tableNameString);
-            sqlCommand.Parameters.AddWithValue("@schemaName", schemaNameString);
-
-            bool alreadyOpened = connection.State == ConnectionState.Open;
-
-            if (!alreadyOpened)
-                await connection.OpenAsync().ConfigureAwait(false);
-
-            sqlCommand.Transaction = transaction;
-
-            var result = await sqlCommand.ExecuteScalarAsync().ConfigureAwait(false);
-
-            var tableExist = (int)result != 0;
-
-            if (!alreadyOpened)
-                connection.Close();
-
             return tableExist;
         }
 

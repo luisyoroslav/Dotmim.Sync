@@ -30,11 +30,11 @@ namespace Dotmim.Sync.Postgres.Builders
             return await NpgsqlManagementUtils.GetHelloAsync(connection as NpgsqlConnection, transaction as NpgsqlTransaction).ConfigureAwait(false);
         }
 
-        public override Task<SyncTable> GetTableAsync(string tableName, string schemaName, DbConnection connection, DbTransaction transaction = null) => throw new NotImplementedException();
+        public override Task<SyncTable> GetTableAsync(string tableName, string schemaName, DbConnection connection, DbTransaction transaction = null)
+            => NpgsqlManagementUtils.GetTableAsync(tableName, schemaName, connection as NpgsqlConnection, transaction as NpgsqlTransaction);
 
-        public override Task<SyncTable> GetTableDefinitionAsync(string tableName, string schemaName, DbConnection connection,
-            DbTransaction transaction = null) =>
-            throw new NotImplementedException();
+        public override Task<SyncTable> GetTableDefinitionAsync(string tableName, string schemaName, DbConnection connection, DbTransaction transaction = null)
+            => NpgsqlManagementUtils.GetTableDefinitionAsync(tableName, schemaName, connection as NpgsqlConnection, transaction as NpgsqlTransaction);
 
         public override Task<SyncTable> GetTableColumnsAsync(string tableName, string schemaName, DbConnection connection,
             DbTransaction transaction = null) =>

@@ -5,7 +5,9 @@ namespace Dotmim.Sync.Postgres.Scope
 {
     public class NpgsqlScopeBuilder : DbScopeBuilder
     {
-        
+        public NpgsqlScopeBuilder(string scopeInfoTableName) : base(scopeInfoTableName)
+        {
+        }
 
         public override IDbScopeInfoBuilder CreateScopeInfoBuilder(string scopeTableName)
         {

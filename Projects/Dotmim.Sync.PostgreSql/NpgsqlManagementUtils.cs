@@ -445,49 +445,35 @@ namespace Dotmim.Sync.Postgres
             return tableExist;
         }
 
-        public static async Task<bool> TableExistsAsync(NpgsqlConnection connection, NpgsqlTransaction transaction, string quotedTableName)
+        public static async Task<bool> TableExistsAsync(string tableName, string schemaName, NpgsqlConnection connection, NpgsqlTransaction transaction)
         {
-            bool tableExist;
-            var tableName = ParserName.Parse(quotedTableName, "\"").ObjectName;
+            var tableNameString = ParserName.Parse(tableName, "\"").ToString();
+            var schemaNameString = ParserName.Parse(schemaName, "\"").ToString();
+            schemaNameString = string.IsNullOrEmpty(schemaNameString) ? "public" : schemaNameString;
 
-            using (DbCommand dbCommand = connection.CreateCommand())
-            {
-                dbCommand.CommandText = "SELECT count(*) FROM information_schema.tables " +
-                                        "WHERE table_type = 'BASE TABLE' AND table_schema != 'pg_catalog' AND table_schema != 'information_schema' " +
-                                        "AND table_name = @tableName AND table_schema = @schemaName";
+            var command = "SELECT count(*) FROM information_schema.tables " +
+                          "WHERE table_type = 'BASE TABLE' AND table_schema != 'pg_catalog' AND table_schema != 'information_schema' " +
+                          "AND table_name = @tableName AND table_schema = @schemaName";
 
-                NpgsqlParameter sqlParameter = new NpgsqlParameter()
-                {
-                    ParameterName = "@tableName",
-                    Value = tableName
-                };
-                dbCommand.Parameters.Add(sqlParameter);
+            using var sqlCommand = new NpgsqlCommand(command, connection);
+            
+            sqlCommand.Parameters.AddWithValue("@tableName", tableNameString);
+            sqlCommand.Parameters.AddWithValue("@schemaName", schemaNameString);
 
-                sqlParameter = new NpgsqlParameter()
-                {
-                    ParameterName = "@schemaName",
-                    Value = GetUnquotedSqlSchemaName(ParserName.Parse(quotedTableName, "\""))
-                };
-                dbCommand.Parameters.Add(sqlParameter);
+            bool alreadyOpened = connection.State == ConnectionState.Open;
 
-                bool alreadyOpened = connection.State == ConnectionState.Open;
+            if (!alreadyOpened)
+                await connection.OpenAsync().ConfigureAwait(false);
 
-                if (!alreadyOpened)
-                    await connection.OpenAsync().ConfigureAwait(false);
+            sqlCommand.Transaction = transaction;
 
-                if (transaction != null)
-                    dbCommand.Transaction = transaction;
+            var result = await sqlCommand.ExecuteScalarAsync().ConfigureAwait(false);
 
-                var result = await dbCommand.ExecuteScalarAsync().ConfigureAwait(false);
+            var tableExist = (int)result != 0;
 
-                tableExist = (long)result != 0;
+            if (!alreadyOpened)
+                connection.Close();
 
-                if (!alreadyOpened)
-                    connection.Close();
-
-
-
-            }
             return tableExist;
         }
 

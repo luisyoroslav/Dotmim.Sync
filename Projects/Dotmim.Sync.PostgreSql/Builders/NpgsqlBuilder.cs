@@ -19,13 +19,36 @@ namespace Dotmim.Sync.Postgres.Builders
             
             if (!exists)
                 throw new MissingDatabaseException(connection.Database);
-
         }
+
+        public override Task<SyncTable> EnsureTableAsync(string tableName, string schemaName, DbConnection connection, DbTransaction transaction = null) => throw new NotImplementedException();
+
+        public override Task<SyncSetup> GetAllTablesAsync(DbConnection connection, DbTransaction transaction = null) => throw new NotImplementedException();
 
         public override async Task<(string DatabaseName, string Version)> GetHelloAsync(DbConnection connection, DbTransaction transaction = null)
         {
             return await NpgsqlManagementUtils.GetHelloAsync(connection as NpgsqlConnection, transaction as NpgsqlTransaction).ConfigureAwait(false);
-
         }
+
+        public override Task<SyncTable> GetTableAsync(string tableName, string schemaName, DbConnection connection, DbTransaction transaction = null) => throw new NotImplementedException();
+
+        public override Task<SyncTable> GetTableDefinitionAsync(string tableName, string schemaName, DbConnection connection,
+            DbTransaction transaction = null) =>
+            throw new NotImplementedException();
+
+        public override Task<SyncTable> GetTableColumnsAsync(string tableName, string schemaName, DbConnection connection,
+            DbTransaction transaction = null) =>
+            throw new NotImplementedException();
+
+        public override Task<bool> ExistsTableAsync(string tableName, string schemaName, DbConnection connection, DbTransaction transaction = null) 
+            => NpgsqlManagementUtils.TableExistsAsync(tableName, schemaName, connection as NpgsqlConnection, transaction as NpgsqlTransaction);
+
+        public override Task DropsTableIfExistsAsync(string tableName, string schemaName, DbConnection connection,
+            DbTransaction transaction = null) =>
+            throw new NotImplementedException();
+
+        public override Task RenameTableAsync(string tableName, string schemaName, string newTableName, string newSchemaName,
+            DbConnection connection, DbTransaction transaction = null) =>
+            throw new NotImplementedException();
     }
 }

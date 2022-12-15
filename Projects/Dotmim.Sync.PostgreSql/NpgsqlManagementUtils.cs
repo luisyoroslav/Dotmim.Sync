@@ -124,6 +124,57 @@ namespace Dotmim.Sync.Postgres
             return syncTable;
         }
 
+        public static async Task<SyncTable> GetColumnsForTableAsync(string tableName, string schemaName, NpgsqlConnection connection, NpgsqlTransaction transaction)
+        {
+            var commandColumn = "Select column_name, " +
+                                "ordinal_position, " +
+                                "data_type, " +
+                                "character_maximum_length, " +
+                                "numeric_precision, " +
+                                "numeric_scale, " +
+                                "is_nullable, " +
+                                "is_generated, " +
+                                "is_identity, " +
+                                //"ind.is_unique, " +
+                                "identity_start, " +
+                                "identity_increment " +
+                                "from information_schema.columns " +
+                                "where table_name = @tableName and table_schema = @schemaName;";
+
+            var tableNameNormalized = ParserName.Parse(tableName, "\"").Unquoted().Normalized().ToString();
+            var tableNameString = ParserName.Parse(tableName, "\"").ToString();
+
+            var schemaNameString = "public";
+            if (!string.IsNullOrEmpty(schemaName))
+            {
+                schemaNameString = ParserName.Parse(schemaName, "\"").ToString();
+                schemaNameString = string.IsNullOrWhiteSpace(schemaNameString) ? "public" : schemaNameString;
+            }
+
+            var syncTable = new SyncTable(tableNameNormalized);
+            using (var sqlCommand = new NpgsqlCommand(commandColumn, connection))
+            {
+                sqlCommand.Parameters.AddWithValue("@tableName", tableNameString);
+                sqlCommand.Parameters.AddWithValue("@schemaName", schemaNameString);
+
+                bool alreadyOpened = connection.State == ConnectionState.Open;
+
+                if (!alreadyOpened)
+                    await connection.OpenAsync().ConfigureAwait(false);
+
+                if (transaction != null)
+                    sqlCommand.Transaction = transaction;
+
+                using (var reader = await sqlCommand.ExecuteReaderAsync().ConfigureAwait(false))
+                    syncTable.Load(reader);
+
+                if (!alreadyOpened)
+                    connection.Close();
+
+            }
+            return syncTable;
+        }
+
         /// <summary>
         /// Get Table
         /// </summary>
@@ -168,64 +219,6 @@ namespace Dotmim.Sync.Postgres
             return syncTable;
         }
 
-
-        /// <summary>
-        /// Get columns for table
-        /// </summary>
-        public static async Task<SyncTable> GetColumnsForTableAsync(NpgsqlConnection connection, NpgsqlTransaction transaction, string tableName, string schemaName)
-        {
-            var commandColumn = $"Select column_name, " +
-                                $"ordinal_position,  " +
-                                $"data_type,  " +
-                                $"character_maximum_length,  " +
-                                $"numeric_precision,  " +
-                                $"numeric_scale,  " +
-                                $"is_nullable,  " +
-                                $"is_generated,  " +
-                                $"is_identity,  " +
-                                $"ind.is_unique,  " +
-                                $"identity_start, " +
-                                $"identity_increment " +
-                                $"from information_schema.columns " +
-                                $"where table_name = @tableName and table_schema = @schemaName ";
-
-            var tableNameNormalized = ParserName.Parse(tableName, "\"").Unquoted().Normalized().ToString();
-            var tableNameString = ParserName.Parse(tableName, "\"").ToString();
-
-            var schemaNameString = "public";
-            if (!string.IsNullOrEmpty(schemaName))
-            {
-                schemaNameString = ParserName.Parse(schemaName, "\"").ToString();
-                schemaNameString = string.IsNullOrWhiteSpace(schemaNameString) ? "public" : schemaNameString;
-            }
-
-            var syncTable = new SyncTable(tableNameNormalized);
-            using (var sqlCommand = new NpgsqlCommand(commandColumn, connection))
-            {
-                sqlCommand.Parameters.AddWithValue("@tableName", tableNameString);
-                sqlCommand.Parameters.AddWithValue("@schemaName", schemaNameString);
-
-                bool alreadyOpened = connection.State == ConnectionState.Open;
-
-                if (!alreadyOpened)
-                    await connection.OpenAsync().ConfigureAwait(false);
-
-                if (transaction != null)
-                    sqlCommand.Transaction = transaction;
-
-                using (var reader = await sqlCommand.ExecuteReaderAsync().ConfigureAwait(false))
-                    syncTable.Load(reader);
-
-                if (!alreadyOpened)
-                    connection.Close();
-
-            }
-            return syncTable;
-        }
-
-        /// <summary>
-        /// Get primary keys columns
-        /// </summary>
         public static async Task<SyncTable> GetPrimaryKeysForTableAsync(NpgsqlConnection connection, NpgsqlTransaction transaction, string tableName, string schemaName)
         {
 

@@ -35,13 +35,12 @@ namespace Dotmim.Sync.Postgres.Builders
 
         public override Task<SyncTable> GetTableDefinitionAsync(string tableName, string schemaName, DbConnection connection, DbTransaction transaction = null)
             => NpgsqlManagementUtils.GetTableDefinitionAsync(tableName, schemaName, connection as NpgsqlConnection, transaction as NpgsqlTransaction);
-
-        public override Task<SyncTable> GetTableColumnsAsync(string tableName, string schemaName, DbConnection connection,
-            DbTransaction transaction = null) =>
-            throw new NotImplementedException();
-
-        public override Task<bool> ExistsTableAsync(string tableName, string schemaName, DbConnection connection, DbTransaction transaction = null) 
+        
+        public override Task<bool> ExistsTableAsync(string tableName, string schemaName, DbConnection connection, DbTransaction transaction = null)
             => NpgsqlManagementUtils.TableExistsAsync(tableName, schemaName, connection as NpgsqlConnection, transaction as NpgsqlTransaction);
+
+        public override Task<SyncTable> GetTableColumnsAsync(string tableName, string schemaName, DbConnection connection, DbTransaction transaction = null) =>
+            NpgsqlManagementUtils.GetColumnsForTableAsync(tableName, schemaName, connection as NpgsqlConnection, transaction as NpgsqlTransaction);
 
         public override Task DropsTableIfExistsAsync(string tableName, string schemaName, DbConnection connection,
             DbTransaction transaction = null) =>

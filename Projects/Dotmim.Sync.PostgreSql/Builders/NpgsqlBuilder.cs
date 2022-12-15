@@ -21,9 +21,11 @@ namespace Dotmim.Sync.Postgres.Builders
                 throw new MissingDatabaseException(connection.Database);
         }
 
-        public override Task<SyncTable> EnsureTableAsync(string tableName, string schemaName, DbConnection connection, DbTransaction transaction = null) => throw new NotImplementedException();
+        public override Task<SyncTable> EnsureTableAsync(string tableName, string schemaName, DbConnection connection, DbTransaction transaction = null)
+            => Task.FromResult(new SyncTable(tableName, schemaName));
 
-        public override Task<SyncSetup> GetAllTablesAsync(DbConnection connection, DbTransaction transaction = null) => throw new NotImplementedException();
+        public override Task<SyncSetup> GetAllTablesAsync(DbConnection connection, DbTransaction transaction = null)
+            => NpgsqlManagementUtils.GetAllTablesAsync(connection as NpgsqlConnection, transaction as NpgsqlTransaction);
 
         public override async Task<(string DatabaseName, string Version)> GetHelloAsync(DbConnection connection, DbTransaction transaction = null)
         {
@@ -48,6 +50,6 @@ namespace Dotmim.Sync.Postgres.Builders
 
         public override Task RenameTableAsync(string tableName, string schemaName, string newTableName, string newSchemaName,
             DbConnection connection, DbTransaction transaction = null) =>
-            throw new NotImplementedException();
+            throw new NotImplementedException(); // todo
     }
 }

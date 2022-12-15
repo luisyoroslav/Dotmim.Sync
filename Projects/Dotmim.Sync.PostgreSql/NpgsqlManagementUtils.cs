@@ -126,7 +126,7 @@ namespace Dotmim.Sync.Postgres
 
         public static async Task<SyncTable> GetColumnsForTableAsync(string tableName, string schemaName, NpgsqlConnection connection, NpgsqlTransaction transaction)
         {
-            var commandColumn = "Select column_name, " +
+            var commandColumn = "SELECT column_name AS name, " +
                                 "ordinal_position, " +
                                 "data_type, " +
                                 "character_maximum_length, " +
@@ -138,8 +138,8 @@ namespace Dotmim.Sync.Postgres
                                 //"ind.is_unique, " +
                                 "identity_start, " +
                                 "identity_increment " +
-                                "from information_schema.columns " +
-                                "where table_name = @tableName and table_schema = @schemaName;";
+                                "FROM information_schema.columns " +
+                                "WHERE table_name = @tableName AND table_schema = @schemaName;";
 
             var tableNameNormalized = ParserName.Parse(tableName, "\"").Unquoted().Normalized().ToString();
             var tableNameString = ParserName.Parse(tableName, "\"").ToString();
@@ -173,6 +173,124 @@ namespace Dotmim.Sync.Postgres
 
             }
             return syncTable;
+        }
+
+        public static async Task<bool> DatabaseExistsAsync(NpgsqlConnection connection, NpgsqlTransaction transaction)
+        {
+            bool tableExist;
+
+            using (DbCommand dbCommand = connection.CreateCommand())
+            {
+                dbCommand.CommandText = "SELECT count(*) FROM pg_database where datname = @databaseName";
+
+                var sqlParameter = new NpgsqlParameter()
+                {
+                    ParameterName = "@databaseName",
+                    Value = connection.Database
+                };
+                dbCommand.Parameters.Add(sqlParameter);
+
+                bool alreadyOpened = connection.State == ConnectionState.Open;
+
+                if (!alreadyOpened)
+                    await connection.OpenAsync().ConfigureAwait(false);
+
+                if (transaction != null)
+                    dbCommand.Transaction = transaction;
+
+                var result = await dbCommand.ExecuteScalarAsync().ConfigureAwait(false);
+
+                tableExist = (int)result != 0;
+
+                if (!alreadyOpened)
+                    connection.Close();
+            }
+            return tableExist;
+        }
+
+        public static async Task<(string DatabaseName, string EngineVersion)> GetHelloAsync(NpgsqlConnection connection, NpgsqlTransaction transaction)
+        {
+            string dbName = null;
+            string dbVersion = null;
+
+            using (DbCommand dbCommand = connection.CreateCommand())
+            {
+                dbCommand.CommandText = "SELECT version(), pg_database.datname FROM pg_database WHERE datname = @databaseName;";
+
+                var sqlParameter = new NpgsqlParameter()
+                {
+                    ParameterName = "@databaseName",
+                    Value = connection.Database
+                };
+                dbCommand.Parameters.Add(sqlParameter);
+
+                bool alreadyOpened = connection.State == ConnectionState.Open;
+
+                if (!alreadyOpened)
+                    await connection.OpenAsync().ConfigureAwait(false);
+
+                if (transaction != null)
+                    dbCommand.Transaction = transaction;
+
+                using (var reader = await dbCommand.ExecuteReaderAsync().ConfigureAwait(false))
+                {
+                    if (reader.HasRows)
+                    {
+                        reader.Read();
+
+                        dbVersion = reader.GetString(0);
+                        dbName = reader.GetString(1);
+                    }
+                }
+
+                if (!alreadyOpened)
+                    connection.Close();
+            }
+            return (dbName, dbVersion);
+        }
+
+        public static async Task<SyncSetup> GetAllTablesAsync(NpgsqlConnection connection, NpgsqlTransaction transaction)
+        {
+            var command = "SELECT tbl.table_name AS TableName, tbl.table_schema AS SchemaName FROM information_schema.tables AS tbl " +
+                          "WHERE tbl.table_schema NOT IN ('pg_catalog', 'information_schema') " +
+                          "AND tbl.table_type = 'BASE TABLE';";
+
+            var syncSetup = new SyncSetup();
+
+            using (var sqlCommand = new NpgsqlCommand(command, connection))
+            {
+                bool alreadyOpened = connection.State == ConnectionState.Open;
+
+                if (!alreadyOpened)
+                    await connection.OpenAsync().ConfigureAwait(false);
+
+                sqlCommand.Transaction = transaction;
+
+                using (var reader = await sqlCommand.ExecuteReaderAsync().ConfigureAwait(false))
+                {
+                    while (reader.Read())
+                    {
+                        var tableName = reader.GetString(0);
+                        var schemaName = reader.GetString(1) == "public" ? null : reader.GetString(1);
+                        var setupTable = new SetupTable(tableName, schemaName);
+                        syncSetup.Tables.Add(setupTable);
+                    }
+                }
+
+                foreach (var setupTable in syncSetup.Tables)
+                {
+                    var syncTableColumnsList = await GetColumnsForTableAsync(setupTable.TableName, setupTable.SchemaName, connection, transaction).ConfigureAwait(false);
+
+                    foreach (var column in syncTableColumnsList.Rows)
+                        setupTable.Columns.Add(column["name"].ToString());
+                }
+
+
+                if (!alreadyOpened)
+                    connection.Close();
+
+            }
+            return syncSetup;
         }
 
         /// <summary>
@@ -382,84 +500,6 @@ namespace Dotmim.Sync.Postgres
 
             return parser.SchemaName;
         }
-
-
-        public static async Task<(string DatabaseName, string EngineVersion)> GetHelloAsync(NpgsqlConnection connection, NpgsqlTransaction transaction)
-        {
-            string dbName = null;
-            string dbVersion = null;
-
-            using (DbCommand dbCommand = connection.CreateCommand())
-            {
-                dbCommand.CommandText = "SELECT version(), pg_database.datname FROM pg_database WHERE datname = @databaseName;";
-
-                var sqlParameter = new NpgsqlParameter()
-                {
-                    ParameterName = "@databaseName",
-                    Value = connection.Database
-                };
-                dbCommand.Parameters.Add(sqlParameter);
-
-                bool alreadyOpened = connection.State == ConnectionState.Open;
-
-                if (!alreadyOpened)
-                    await connection.OpenAsync().ConfigureAwait(false);
-
-                if (transaction != null)
-                    dbCommand.Transaction = transaction;
-
-                using (var reader = await dbCommand.ExecuteReaderAsync().ConfigureAwait(false))
-                {
-                    if (reader.HasRows)
-                    {
-                        reader.Read();
-
-                        dbVersion = reader.GetString(0);
-                        dbName = reader.GetString(1);
-                    }
-                }
-
-                if (!alreadyOpened)
-                    connection.Close();
-            }
-            return (dbName, dbVersion);
-        }
-
-
-
-        public static async Task<bool> DatabaseExistsAsync(NpgsqlConnection connection, NpgsqlTransaction transaction)
-        {
-            bool tableExist;
-
-            using (DbCommand dbCommand = connection.CreateCommand())
-            {
-                dbCommand.CommandText = "SELECT count(*) FROM pg_database where pg_database.datname = @databaseName";
-
-                var sqlParameter = new NpgsqlParameter()
-                {
-                    ParameterName = "@databaseName",
-                    Value = connection.Database
-                };
-                dbCommand.Parameters.Add(sqlParameter);
-
-                bool alreadyOpened = connection.State == ConnectionState.Open;
-
-                if (!alreadyOpened)
-                    await connection.OpenAsync().ConfigureAwait(false);
-
-                if (transaction != null)
-                    dbCommand.Transaction = transaction;
-
-                var result = await dbCommand.ExecuteScalarAsync().ConfigureAwait(false);
-
-                tableExist = (long)result != 0;
-
-                if (!alreadyOpened)
-                    connection.Close();
-            }
-            return tableExist;
-        }
-
 
         public static async Task<bool> ProcedureExistsAsync(NpgsqlConnection connection, NpgsqlTransaction transaction, string quotedProcedureName)
         {

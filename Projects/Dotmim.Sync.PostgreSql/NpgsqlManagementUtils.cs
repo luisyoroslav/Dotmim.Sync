@@ -293,6 +293,31 @@ namespace Dotmim.Sync.Postgres
             return syncSetup;
         }
 
+        public static async Task DropTableIfExistsAsync(string tableName, string schemaName, NpgsqlConnection connection, NpgsqlTransaction transaction)
+        {
+            var name = tableName;
+            var sName = string.IsNullOrEmpty(schemaName) ? "public" : schemaName;
+
+            var command = $"DROP TABLE IF EXISTS {sName}.{name};";
+
+            using (var sqlCommand = new NpgsqlCommand(command, connection))
+            {
+
+                bool alreadyOpened = connection.State == ConnectionState.Open;
+
+                if (!alreadyOpened)
+                    await connection.OpenAsync().ConfigureAwait(false);
+
+                if (transaction != null)
+                    sqlCommand.Transaction = transaction;
+
+                await sqlCommand.ExecuteNonQueryAsync().ConfigureAwait(false);
+
+                if (!alreadyOpened)
+                    connection.Close();
+            }
+        }
+
         /// <summary>
         /// Get Table
         /// </summary>
@@ -434,31 +459,6 @@ namespace Dotmim.Sync.Postgres
         public static async Task DropProcedureIfExistsAsync(NpgsqlConnection connection, NpgsqlTransaction transaction, int commandTimout, string quotedProcedureName)
         {
             throw new NotImplementedException();
-        }
-
-        public static async Task DropTableIfExistsAsync(NpgsqlConnection connection, NpgsqlTransaction transaction, int commandTimeout, string quotedTableName)
-        {
-            var tableName = ParserName.Parse(quotedTableName, "\"").ToString();
-
-            using (var sqlCommand = new NpgsqlCommand(
-                string.Format(CultureInfo.InvariantCulture, "DROP TABLE IF EXISTS {0}", quotedTableName), connection))
-            {
-
-                bool alreadyOpened = connection.State == ConnectionState.Open;
-
-                if (!alreadyOpened)
-                    await connection.OpenAsync().ConfigureAwait(false);
-
-                if (transaction != null)
-                    sqlCommand.Transaction = transaction;
-
-                await sqlCommand.ExecuteNonQueryAsync().ConfigureAwait(false);
-
-                if (!alreadyOpened)
-                    connection.Close();
-
-
-            }
         }
 
         public static async Task DropTriggerIfExistsAsync(NpgsqlConnection connection, NpgsqlTransaction transaction, int commandTimeout,
